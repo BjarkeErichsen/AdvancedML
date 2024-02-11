@@ -67,9 +67,21 @@ class MaskedCouplingLayer(nn.Module):
         sum_log_det_J: [torch.Tensor]
             The sum of the log determinants of the Jacobian matrices of the forward transformations of dimension `(batch_size, feature_dim)`.
         """
+        t = self.translation_net
+        s = self.scale_net
+        batch_size = z.shape[0]
+        b = self.mask.expand(batch_size, -1)  # -1 means "do not change this dimension"
+        D = z.shape[1]
         x = z
+
+
+        z = b*x + (1 - b) * (x * torch.exp(s(b*x)) + t(b*x))
+
         log_det_J = torch.zeros(z.shape[0])
-        return x, log_det_J
+        for i in range(D):
+            log_det_J += (1 - b[:, i]) * s(b*x)[:, i]
+        
+        return z, log_det_J
     
     def inverse(self, x):
         """
@@ -86,7 +98,24 @@ class MaskedCouplingLayer(nn.Module):
         """
         z = x
         log_det_J = torch.zeros(x.shape[0])
-        return z, log_det_J
+
+        t = self.translation_net
+        s = self.scale_net
+        batch_size = z.shape[0]
+        b = self.mask.expand(batch_size, -1)  # -1 means "do not change this dimension"
+
+        D = z.shape[1]
+       
+
+
+
+        x = b*z + (1 - b) * (z * torch.exp(s(b*z)) + t(b*z))
+
+        log_det_J = torch.zeros(z.shape[0])
+        for i in range(D):
+            log_det_J += (1 - b[:,i]) * s(b*z)[:, i]
+        
+        return x, log_det_J
 
 
 class Flow(nn.Module):
@@ -230,7 +259,7 @@ if __name__ == "__main__":
     # Parse arguments
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('mode', type=str, default='train', choices=['train', 'sample'], help='what to do when running the script (default: %(default)s)')
+    parser.add_argument('--mode', type=str, default='train', choices=['train', 'sample'], help='what to do when running the script (default: %(default)s)')
     parser.add_argument('--data', type=str, default='tg', choices=['tg', 'cb'], help='toy dataset to use {tg: two Gaussians, cb: chequerboard} (default: %(default)s)')
     parser.add_argument('--model', type=str, default='model.pt', help='file to save model to or load model from (default: %(default)s)')
     parser.add_argument('--samples', type=str, default='samples.png', help='file to save samples in (default: %(default)s)')
